@@ -373,12 +373,7 @@ def _reference_close_on_or_before(
     prices: pd.Series,
     target: pd.Timestamp,
 ):
-    """
-    Select the final regular-session close on or before a calendar anchor.
-
-    This mirrors the convention commonly used by Google Finance and Yahoo
-    Finance charts when a period boundary lands on a weekend or holiday.
-    """
+    """Final exchange close on or before a calendar boundary."""
     prices = _normalise_daily_prices(prices)
     if prices.empty:
         return np.nan
@@ -394,53 +389,56 @@ def _reference_close_on_or_before(
     return float(eligible.iloc[-1])
 
 
-def date_return(
+def _reference_close_on_or_after(
     prices: pd.Series,
-    start: pd.Timestamp,
-    end_price: float | None = None,
+    target: pd.Timestamp,
 ):
-    """Calendar-period price return using the close on/before the anchor date."""
+    """First exchange close on or after a calendar boundary."""
     prices = _normalise_daily_prices(prices)
     if prices.empty:
         return np.nan
 
-    reference_close = _reference_close_on_or_before(prices, start)
-    latest_price = float(prices.iloc[-1]) if end_price is None else float(end_price)
+    target = pd.Timestamp(target)
+    if target.tzinfo is not None:
+        target = target.tz_localize(None)
+    target = target.normalize()
 
-    if pd.isna(reference_close) or reference_close == 0 or pd.isna(latest_price):
+    eligible = prices.loc[prices.index >= target]
+    if eligible.empty:
         return np.nan
-    return (latest_price / reference_close - 1) * 100
+    return float(eligible.iloc[0])
+
+
+def _safe_return(end_price, start_price):
+    if pd.isna(end_price) or pd.isna(start_price) or start_price == 0:
+        return np.nan
+    return (float(end_price) / float(start_price) - 1) * 100
 
 
 def ytd_return(prices: pd.Series, end_price: float | None = None):
     """
-    Google/Yahoo-style YTD price return.
+    Chart-style YTD return.
 
-    The reference is the final regular-session close of the previous
-    calendar year. Dividends are not reinvested.
+    Google/Yahoo chart percentages generally use the first visible close in
+    the selected year as the chart base. Each ticker therefore follows its
+    own exchange calendar and holidays.
     """
     prices = _normalise_daily_prices(prices)
     if prices.empty:
         return np.nan
 
-    end_date = prices.index[-1]
-    reference_date = pd.Timestamp(year=end_date.year - 1, month=12, day=31)
-    reference_close = _reference_close_on_or_before(prices, reference_date)
     latest_price = float(prices.iloc[-1]) if end_price is None else float(end_price)
-
-    if pd.isna(reference_close) or reference_close == 0 or pd.isna(latest_price):
-        return np.nan
-    return (latest_price / reference_close - 1) * 100
+    year_start = pd.Timestamp(year=prices.index[-1].year, month=1, day=1)
+    reference = _reference_close_on_or_after(prices, year_start)
+    return _safe_return(latest_price, reference)
 
 
 def calculate_period_return(prices: pd.Series):
-    """Return the percentage change from the first to last visible chart point."""
-    prices = prices.dropna()
-
+    """Percentage change from the first to last visible chart point."""
+    prices = pd.to_numeric(prices, errors="coerce").dropna().sort_index()
     if len(prices) < 2:
         return np.nan
-
-    return (prices.iloc[-1] / prices.iloc[0] - 1) * 100
+    return _safe_return(prices.iloc[-1], prices.iloc[0])
 
 
 def standard_period_return(
@@ -449,62 +447,49 @@ def standard_period_return(
     end_price: float | None = None,
 ):
     """
-    Calculate price performance using Yahoo-style calendar anchors.
+    Unified dynamic chart-return engine for equities, ETFs and indices.
 
-    The starting value comes from regular daily closing prices.
-    The endpoint may be either the latest daily close or a supplied
-    live regular-market price.
+    Conventions:
+    - 1D/3D/5D: trading-session observations.
+    - YTD: first exchange close on or after 1 January.
+    - 1M/3M/6M/1Y/3Y: first exchange close on or after the calendar boundary.
+    - 5Y: final exchange close on or before the exact five-year boundary,
+      matching the observed Google/Yahoo convention more closely.
+
+    The series itself supplies the relevant exchange calendar, so US, Japan,
+    Hong Kong and other local holidays are handled without hard-coding dates.
     """
-    daily_prices = _normalise_daily_prices(daily_prices)
-
-    if len(daily_prices) < 2:
+    prices = _normalise_daily_prices(daily_prices)
+    if len(prices) < 2:
         return np.nan
 
-    if end_price is None or pd.isna(end_price):
-        end_price = float(daily_prices.iloc[-1])
-    else:
-        end_price = float(end_price)
+    latest_price = (
+        float(prices.iloc[-1])
+        if end_price is None or pd.isna(end_price)
+        else float(end_price)
+    )
 
-    if period in {"1D", "3D", "5D"}:
-        sessions = {
-            "1D": 1,
-            "3D": 3,
-            "5D": 5,
-        }[period]
-
-        # Use completed historical sessions as the denominator.
-        if len(daily_prices) <= sessions:
+    session_map = {"1D": 1, "3D": 3, "5D": 5}
+    if period in session_map:
+        sessions = session_map[period]
+        if len(prices) <= sessions:
             return np.nan
+        reference = float(prices.iloc[-(sessions + 1)])
+        return _safe_return(latest_price, reference)
 
-        reference_close = float(daily_prices.iloc[-(sessions + 1)])
+    if period == "YTD":
+        return ytd_return(prices, end_price=latest_price)
 
-    elif period == "YTD":
-        current_year = daily_prices.index[-1].year
+    if period not in PERIOD_STARTS:
+        return np.nan
 
-        prior_year_prices = daily_prices[
-            daily_prices.index.year < current_year
-        ]
-
-        if prior_year_prices.empty:
-            return np.nan
-
-        reference_close = float(prior_year_prices.iloc[-1])
-
-    elif period in {"1M", "3M", "6M", "1Y", "3Y", "5Y"}:
-        target_date = PERIOD_STARTS[period](daily_prices.index[-1])
-
-        reference_close = _reference_close_on_or_before(
-            daily_prices,
-            target_date,
-        )
-
+    anchor = PERIOD_STARTS[period](prices.index[-1])
+    if period == "5Y":
+        reference = _reference_close_on_or_before(prices, anchor)
     else:
-        return np.nan
+        reference = _reference_close_on_or_after(prices, anchor)
 
-    if pd.isna(reference_close) or reference_close == 0:
-        return np.nan
-
-    return (end_price / reference_close - 1) * 100
+    return _safe_return(latest_price, reference)
 
 
 def build_market_table(
@@ -515,9 +500,7 @@ def build_market_table(
 
     for _, item in universe.iterrows():
         ticker = item["Ticker"]
-        prices = get_close_series(history, ticker)
-        prices = _normalise_daily_prices(prices)
-
+        prices = _normalise_daily_prices(get_close_series(history, ticker))
         live_price = get_regular_market_price(ticker)
 
         if pd.isna(live_price) and not prices.empty:
@@ -534,71 +517,14 @@ def build_market_table(
                 "5Y %": np.nan,
             }
         else:
-            # Yahoo daily history may already contain today's partial or
-            # completed session. Remove the final observation if it has
-            # the same date as today, so previous-close calculations do
-            # not accidentally compare live price against itself.
-            ticker_history = prices.copy()
-
-            today = pd.Timestamp.now().normalize()
-
-            if (
-                not ticker_history.empty
-                and ticker_history.index[-1].normalize() >= today
-            ):
-                completed_history = ticker_history.iloc[:-1]
-            else:
-                completed_history = ticker_history
-
-            if completed_history.empty:
-                completed_history = ticker_history
-
-            previous_close = (
-                float(completed_history.iloc[-1])
-                if not completed_history.empty
-                else np.nan
-            )
-
-            one_day_return = (
-                (live_price / previous_close - 1) * 100
-                if not pd.isna(previous_close) and previous_close != 0
-                else np.nan
-            )
-
             values = {
                 "Price": float(live_price),
-
-                "1D %": one_day_return,
-
-                "3D %": standard_period_return(
-                    prices,
-                    "3D",
-                    end_price=live_price,
-                ),
-
-                "5D %": standard_period_return(
-                    prices,
-                    "5D",
-                    end_price=live_price,
-                ),
-
-                "YTD %": standard_period_return(
-                    prices,
-                    "YTD",
-                    end_price=live_price,
-                ),
-
-                "3Y %": standard_period_return(
-                    prices,
-                    "3Y",
-                    end_price=live_price,
-                ),
-
-                "5Y %": standard_period_return(
-                    prices,
-                    "5Y",
-                    end_price=live_price,
-                ),
+                "1D %": standard_period_return(prices, "1D", live_price),
+                "3D %": standard_period_return(prices, "3D", live_price),
+                "5D %": standard_period_return(prices, "5D", live_price),
+                "YTD %": standard_period_return(prices, "YTD", live_price),
+                "3Y %": standard_period_return(prices, "3Y", live_price),
+                "5Y %": standard_period_return(prices, "5Y", live_price),
             }
 
         market_cap = (
