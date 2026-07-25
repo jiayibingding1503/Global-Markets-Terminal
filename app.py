@@ -616,7 +616,8 @@ def build_market_table(
                 "Price": np.nan,
                 "1D %": np.nan,
                 "3D %": np.nan,
-                "5D %": np.nan,
+                "1M %": np.nan,
+                "6M %": np.nan,
                 "YTD %": np.nan,
                 "3Y %": np.nan,
                 "5Y %": np.nan,
@@ -630,9 +631,9 @@ def build_market_table(
                     end_price=live_price,
                     previous_close=previous_close,
                 ),
-                "1D %": quote["change_1d"],
                 "3D %": standard_period_return(prices, "3D", live_price),
-                "5D %": standard_period_return(prices, "5D", live_price),
+                "1M %": standard_period_return(prices, "1M", live_price),  
+                "6M %": standard_period_return(prices, "6M", live_price),
                 "YTD %": standard_period_return(prices, "YTD", live_price),
                 "3Y %": standard_period_return(prices, "3Y", live_price),
                 "5Y %": standard_period_return(prices, "5Y", live_price),
@@ -692,7 +693,7 @@ def display_market_table(title: str, table: pd.DataFrame):
 
     cols = [
         "Ticker", "Name", "Country", "Sector", "Industry", "Currency",
-        "Price", "1D %", "3D %", "5D %", "YTD %", "3Y %", "5Y %",
+        "Price", "1D %", "3D %", "1M %", "6M %", "YTD %", "3Y %", "5Y %",
         "Market Cap"
     ]
 
@@ -703,14 +704,15 @@ def display_market_table(title: str, table: pd.DataFrame):
         display.style
         .map(
             color_return,
-            subset=["1D %", "3D %", "5D %", "YTD %", "3Y %", "5Y %"],
+            subset=["1D %", "3D %", "1M %", "6M %", "YTD %", "3Y %", "5Y %"],
         )
         .format(
             {
                 "Price": lambda x: "—" if pd.isna(x) else f"{x:,.2f}",
                 "1D %": lambda x: "—" if pd.isna(x) else f"{x:+.2f}%",
                 "3D %": lambda x: "—" if pd.isna(x) else f"{x:+.2f}%",
-                "5D %": lambda x: "—" if pd.isna(x) else f"{x:+.2f}%",
+                "1M %": lambda x: "—" if pd.isna(x) else f"{x:+.2f}%",
+                "6M %": lambda x: "—" if pd.isna(x) else f"{x:+.2f}%",
                 "YTD %": lambda x: "—" if pd.isna(x) else f"{x:+.2f}%",
                 "3Y %": lambda x: "—" if pd.isna(x) else f"{x:+.2f}%",
                 "5Y %": lambda x: "—" if pd.isna(x) else f"{x:+.2f}%",
@@ -784,19 +786,53 @@ def make_price_chart(
 # ============================================================
 # MARKET SNAPSHOT
 # ============================================================
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def market_snapshot() -> pd.DataFrame:
     rows = []
 
     for name, ticker in OVERVIEW_ASSETS.items():
-        quote = get_quote_snapshot(ticker)
+        price = np.nan
+        previous_close = np.nan
+
+        try:
+            obj = yf.Ticker(ticker)
+
+            try:
+                fast = obj.fast_info
+                price = fast.get("lastPrice") or fast.get("last_price")
+                previous_close = fast.get("previousClose") or fast.get("previous_close")
+            except Exception:
+                pass
+
+            if price is None or pd.isna(price):
+                info = obj.info
+                price = info.get("regularMarketPrice", np.nan)
+                previous_close = info.get("regularMarketPreviousClose", np.nan)
+
+            if pd.isna(price):
+                hist = obj.history(period="2d")
+                if not hist.empty:
+                    price = float(hist["Close"].iloc[-1])
+                    if len(hist) >= 2:
+                        previous_close = float(hist["Close"].iloc[-2])
+
+        except Exception:
+            pass
+
+        daily_change = (
+            (price / previous_close - 1) * 100
+            if not pd.isna(price)
+            and not pd.isna(previous_close)
+            and previous_close != 0
+            else np.nan
+        )
 
         rows.append(
             {
                 "Name": name,
                 "Ticker": ticker,
-                "Value": quote["price"],
-                "1D %": quote["change_1d"],
+                "Value": price,
+                "1D %": daily_change,
             }
         )
 
