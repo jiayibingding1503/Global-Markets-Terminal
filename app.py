@@ -157,7 +157,7 @@ def load_watchlist(path: str = "Watchlist.csv") -> pd.DataFrame:
 @st.cache_data(ttl=1800, show_spinner=False)
 def download_history(
     tickers: tuple[str, ...],
-    period: str = "5y",
+    period: str = "6y",
 ) -> pd.DataFrame:
     if not tickers:
         return pd.DataFrame()
@@ -213,6 +213,33 @@ def get_market_cap(ticker: str):
             except Exception:
                 value = None
         return float(value) if value is not None else np.nan
+    except Exception:
+        return np.nan
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_regular_market_price(ticker: str):
+    """Latest regular-market price, with daily-close fallback."""
+    try:
+        obj = yf.Ticker(ticker)
+        try:
+            fast = obj.fast_info
+            value = fast.get("lastPrice") or fast.get("last_price")
+        except Exception:
+            value = None
+
+        if value is None or pd.isna(value):
+            try:
+                value = obj.info.get("regularMarketPrice")
+            except Exception:
+                value = None
+
+        if value is None or pd.isna(value):
+            hist = obj.history(period="5d", interval="1d", auto_adjust=False)
+            if not hist.empty:
+                value = hist["Close"].dropna().iloc[-1]
+
+        return float(value) if value is not None and not pd.isna(value) else np.nan
     except Exception:
         return np.nan
 
@@ -327,42 +354,83 @@ def obs_return(prices: pd.Series, n: int):
     return (prices.iloc[-1] / prices.iloc[-(n + 1)] - 1) * 100
 
 
-def date_return(prices: pd.Series, start: pd.Timestamp):
+def _normalise_daily_prices(prices: pd.Series) -> pd.Series:
+    """Return a clean, date-indexed series of regular-session closes."""
+    prices = pd.to_numeric(prices, errors="coerce").dropna().sort_index()
+    if prices.empty:
+        return prices
+
+    index = pd.to_datetime(prices.index)
+    if getattr(index, "tz", None) is not None:
+        index = index.tz_localize(None)
+
+    # Daily Yahoo data can occasionally contain duplicate timestamps.
+    prices.index = index.normalize()
+    return prices[~prices.index.duplicated(keep="last")].sort_index()
+
+
+def _reference_close_on_or_before(
+    prices: pd.Series,
+    target: pd.Timestamp,
+):
+    """
+    Select the final regular-session close on or before a calendar anchor.
+
+    This mirrors the convention commonly used by Google Finance and Yahoo
+    Finance charts when a period boundary lands on a weekend or holiday.
+    """
+    prices = _normalise_daily_prices(prices)
     if prices.empty:
         return np.nan
 
-    if prices.index.tz is not None and start.tz is None:
-        start = start.tz_localize(prices.index.tz)
-    elif prices.index.tz is None and start.tz is not None:
-        start = start.tz_localize(None)
+    target = pd.Timestamp(target)
+    if target.tzinfo is not None:
+        target = target.tz_localize(None)
+    target = target.normalize()
 
-    eligible = prices.loc[prices.index >= start]
+    eligible = prices.loc[prices.index <= target]
     if eligible.empty:
         return np.nan
-    return (prices.iloc[-1] / eligible.iloc[0] - 1) * 100
+    return float(eligible.iloc[-1])
 
 
-def ytd_return(prices: pd.Series):
-    """
-    Yahoo-style YTD price return:
-    latest regular close divided by the final available close
-    from the previous calendar year, minus one.
-    """
-    prices = prices.dropna().sort_index()
-
+def date_return(
+    prices: pd.Series,
+    start: pd.Timestamp,
+    end_price: float | None = None,
+):
+    """Calendar-period price return using the close on/before the anchor date."""
+    prices = _normalise_daily_prices(prices)
     if prices.empty:
         return np.nan
 
-    current_year = prices.index[-1].year
-    prior_year_prices = prices[prices.index.year == current_year - 1]
+    reference_close = _reference_close_on_or_before(prices, start)
+    latest_price = float(prices.iloc[-1]) if end_price is None else float(end_price)
 
-    if prior_year_prices.empty:
+    if pd.isna(reference_close) or reference_close == 0 or pd.isna(latest_price):
+        return np.nan
+    return (latest_price / reference_close - 1) * 100
+
+
+def ytd_return(prices: pd.Series, end_price: float | None = None):
+    """
+    Google/Yahoo-style YTD price return.
+
+    The reference is the final regular-session close of the previous
+    calendar year. Dividends are not reinvested.
+    """
+    prices = _normalise_daily_prices(prices)
+    if prices.empty:
         return np.nan
 
-    reference_close = prior_year_prices.iloc[-1]
-    latest_close = prices.iloc[-1]
+    end_date = prices.index[-1]
+    reference_date = pd.Timestamp(year=end_date.year - 1, month=12, day=31)
+    reference_close = _reference_close_on_or_before(prices, reference_date)
+    latest_price = float(prices.iloc[-1]) if end_price is None else float(end_price)
 
-    return (latest_close / reference_close - 1) * 100
+    if pd.isna(reference_close) or reference_close == 0 or pd.isna(latest_price):
+        return np.nan
+    return (latest_price / reference_close - 1) * 100
 
 
 def calculate_period_return(prices: pd.Series):
@@ -375,32 +443,45 @@ def calculate_period_return(prices: pd.Series):
     return (prices.iloc[-1] / prices.iloc[0] - 1) * 100
 
 
-def standard_period_return(daily_prices: pd.Series, period: str):
+def standard_period_return(
+    daily_prices: pd.Series,
+    period: str,
+    end_price: float | None = None,
+):
     """
-    Calculate headline performance from raw daily closes.
+    Dynamic Google/Yahoo-style price return.
 
-    1D: latest close versus previous close
-    5D: latest close versus five trading sessions earlier
-    YTD: latest close versus previous calendar year's final close
-    Other periods: latest close versus first close on or after
-    the requested start date.
+    * 1D and 5D use trading-session closes.
+    * YTD uses the previous calendar year's final close.
+    * Month/year periods use the final close on or before the exact
+      calendar anchor, which handles weekends and exchange holidays.
+    * Returns are price returns, not dividend-reinvested total returns.
     """
-    daily_prices = daily_prices.dropna().sort_index()
-
-    if len(daily_prices) < 2:
+    daily_prices = _normalise_daily_prices(daily_prices)
+    if len(daily_prices) < 2 or period not in PERIOD_STARTS:
         return np.nan
 
+    latest_price = (
+        float(daily_prices.iloc[-1])
+        if end_price is None or pd.isna(end_price)
+        else float(end_price)
+    )
+
     if period == "1D":
-        return obs_return(daily_prices, 1)
+        reference = float(daily_prices.iloc[-2])
+        return (latest_price / reference - 1) * 100 if reference else np.nan
 
     if period == "5D":
-        return obs_return(daily_prices, 5)
+        if len(daily_prices) <= 5:
+            return np.nan
+        reference = float(daily_prices.iloc[-6])
+        return (latest_price / reference - 1) * 100 if reference else np.nan
 
     if period == "YTD":
-        return ytd_return(daily_prices)
+        return ytd_return(daily_prices, end_price=latest_price)
 
-    start = PERIOD_STARTS[period](daily_prices.index[-1])
-    return date_return(daily_prices, start)
+    anchor = PERIOD_STARTS[period](daily_prices.index[-1])
+    return date_return(daily_prices, anchor, end_price=latest_price)
 
 
 def build_market_table(
@@ -430,12 +511,8 @@ def build_market_table(
                 "3D %": obs_return(prices, 3),
                 "5D %": obs_return(prices, 5),
                 "YTD %": ytd_return(prices),
-                "3Y %": date_return(
-                    prices, prices.index[-1] - pd.DateOffset(years=3)
-                ),
-                "5Y %": date_return(
-                    prices, prices.index[-1] - pd.DateOffset(years=5)
-                ),
+                "3Y %": standard_period_return(prices, "3Y"),
+                "5Y %": standard_period_return(prices, "5Y"),
             }
 
         market_cap = (
@@ -1094,31 +1171,29 @@ with tabs[4]:
                 if prices.empty:
                     st.warning(f"No price history returned for {selected}.")
                 else:
-                    daily_history = download_history((selected,), "5y")
+                    daily_history = download_history((selected,), "6y")
                     daily_prices = get_close_series(daily_history, selected)
+                    live_price = get_regular_market_price(selected)
+                    if pd.isna(live_price):
+                        live_price = float(daily_prices.iloc[-1])
+
                     selected_return = standard_period_return(
                         daily_prices,
                         period,
+                        end_price=live_price,
                     )
-
-                    one_day = (
-                        obs_return(daily_prices, 1)
-                        if not daily_prices.empty
-                        else np.nan
+                    one_day = standard_period_return(
+                        daily_prices, "1D", end_price=live_price
                     )
-                    five_day = (
-                        obs_return(daily_prices, 5)
-                        if not daily_prices.empty
-                        else np.nan
+                    five_day = standard_period_return(
+                        daily_prices, "5D", end_price=live_price
                     )
-                    ytd_perf = (
-                        ytd_return(daily_prices)
-                        if not daily_prices.empty
-                        else np.nan
+                    ytd_perf = standard_period_return(
+                        daily_prices, "YTD", end_price=live_price
                     )
 
                     m1, m2, m3, m4, m5 = st.columns(5)
-                    m1.metric("Price", f"{prices.iloc[-1]:,.2f}")
+                    m1.metric("Price", f"{live_price:,.2f}")
                     m2.metric(
                         f"{period} Return",
                         "—" if pd.isna(selected_return)
@@ -1183,34 +1258,32 @@ with tabs[5]:
         if prices.empty:
             st.warning(f"No price history returned for {ticker}.")
         else:
-            daily_history = download_history((ticker,), "5y")
+            daily_history = download_history((ticker,), "6y")
             daily_prices = get_close_series(daily_history, ticker)
+            live_price = get_regular_market_price(ticker)
+            if pd.isna(live_price):
+                live_price = float(daily_prices.iloc[-1])
+
             selected_return = standard_period_return(
                 daily_prices,
                 period,
+                end_price=live_price,
             )
-
-            one_day = (
-                obs_return(daily_prices, 1)
-                if not daily_prices.empty
-                else np.nan
+            one_day = standard_period_return(
+                daily_prices, "1D", end_price=live_price
             )
-            five_day = (
-                obs_return(daily_prices, 5)
-                if not daily_prices.empty
-                else np.nan
+            five_day = standard_period_return(
+                daily_prices, "5D", end_price=live_price
             )
-            ytd_perf = (
-                ytd_return(daily_prices)
-                if not daily_prices.empty
-                else np.nan
+            ytd_perf = standard_period_return(
+                daily_prices, "YTD", end_price=live_price
             )
 
             metric_1, metric_2, metric_3, metric_4, metric_5 = st.columns(5)
 
             metric_1.metric(
                 "Price",
-                f"{prices.iloc[-1]:,.2f}",
+                f"{live_price:,.2f}",
             )
 
             metric_2.metric(
@@ -1404,5 +1477,6 @@ st.caption(
     "Market prices, search, news, market capitalisation and earnings data are "
     "retrieved through yfinance. US Treasury yields are retrieved from FRED. "
     "International government yields use the optional BondYields.csv file. "
-    "Data may be delayed and is for research use."
+    "Equity and ETF performance figures are price returns based on regular-session "
+    "Yahoo closes and do not reinvest dividends. Data may be delayed and is for research use."
 )
