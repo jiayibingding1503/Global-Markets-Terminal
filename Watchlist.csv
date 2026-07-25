@@ -1,0 +1,96 @@
+Ticker,Name,Country,Sector,Industry,Asset Class,Theme,Currency
+^GSPC,S&P 500,United States,Multi-Sector,Broad Market,Index,Broad Market,USD
+^NDX,Nasdaq 100,United States,Technology,Large-Cap Growth,Index,Technology,USD
+^SOX,Philadelphia Semiconductor Index,United States,Technology,Semiconductors,Index,Semiconductors,USD
+^N225,Nikkei 225,Japan,Multi-Sector,Broad Market,Index,Japan Equities,JPY
+^KS11,KOSPI,South Korea,Multi-Sector,Broad Market,Index,Korea Equities,KRW
+^TWII,Taiwan Weighted Index,Taiwan,Multi-Sector,Broad Market,Index,Taiwan Equities,TWD
+^HSI,Hang Seng Index,Hong Kong,Multi-Sector,Broad Market,Index,Hong Kong Equities,HKD
+AAPL,Apple,United States,Technology,Consumer Electronics,Equity,Mega-Cap Technology,USD
+MSFT,Microsoft,United States,Technology,Software and Cloud,Equity,Cloud and AI,USD
+NVDA,NVIDIA,United States,Technology,Semiconductors,Equity,AI Accelerators,USD
+AMZN,Amazon,United States,Consumer Discretionary,E-commerce and Cloud,Equity,Cloud and E-commerce,USD
+GOOGL,Alphabet,United States,Communication Services,Internet Platforms,Equity,Digital Advertising and AI,USD
+META,Meta Platforms,United States,Communication Services,Internet Platforms,Equity,Digital Advertising and AI,USD
+TSLA,Tesla,United States,Consumer Discretionary,Automobiles,Equity,Electric Vehicles and Autonomy,USD
+AVGO,Broadcom,United States,Technology,Semiconductors,Equity,AI Networking and Custom Silicon,USD
+AMD,Advanced Micro Devices,United States,Technology,Semiconductors,Equity,CPUs and AI Accelerators,USD
+MU,Micron Technology,United States,Technology,Memory Semiconductors,Equity,Memory and HBM,USD
+QCOM,Qualcomm,United States,Technology,Semiconductors,Equity,Mobile and Edge AI,USD
+MRVL,Marvell Technology,United States,Technology,Semiconductors,Equity,Data Centre Connectivity,USD
+ARM,Arm Holdings,United Kingdom,Technology,Semiconductor IP,Equity,Chip Architecture,USD
+INTC,Intel,United States,Technology,Semiconductors,Equity,Processors and Foundry,USD
+TSM,TSMC ADR,Taiwan,Technology,Semiconductor Foundry,Equity,Leading-Edge Foundry,USD
+ASML.AS,ASML,Netherlands,Technology,Semiconductor Equipment,Equity,Lithography,EUR
+AMAT,Applied Materials,United States,Technology,Semiconductor Equipment,Equity,Wafer Fabrication Equipment,USD
+LRCX,Lam Research,United States,Technology,Semiconductor Equipment,Equity,Wafer Fabrication Equipment,USD
+KLAC,KLA,United States,Technology,Semiconductor Equipment,Equity,Process Control,USD
+8035.T,Tokyo Electron,Japan,Technology,Semiconductor Equipment,Equity,Wafer Fabrication Equipment,JPY
+6857.T,Advantest,Japan,Technology,Semiconductor Equipment,Equity,Semiconductor Testing,JPY
+6920.T,Lasertec,Japan,Technology,Semiconductor Equipment,Equity,Mask Inspection,JPY
+6146.T,DISCO,Japan,Technology,Semiconductor Equipment,Equity,Wafer Cutting and Grinding,JPY
+7735.T,SCREEN Holdings,Japan,Technology,Semiconductor Equipment,Equity,Wafer Cleaning Equipment,JPY
+6723.T,Renesas Electronics,Japan,Technology,Semiconductors,Equity,Automotive Semiconductors,JPY
+4063.T,Shin-Etsu Chemical,Japan,Materials,Semiconductor Materials,Equity,Silicon Wafers and Materials,JPY
+3436.T,SUMCO,Japan,Technology,Semiconductor Materials,Equity,Silicon Wafers,JPY
+6758.T,Sony Group,Japan,Technology,Consumer Electronics,Equity,Image Sensors and Entertainment,JPY
+6501.T,Hitachi,Japan,Industrials,Industrial Technology,Equity,Industrial Digitalisation,JPY
+005930.KS,Samsung Electronics,South Korea,Technology,Semiconductors and Electronics,Equity,Memory and Consumer Electronics,KRW
+000660.KS,SK Hynix,South Korea,Technology,Memory Semiconductors,Equity,Memory and HBM,KRW
+042700.KS,Hanmi Semiconductor,South Korea,Technology,Semiconductor Equipment,Equity,HBM Packaging Equipment,KRW
+035420.KS,Naver,South Korea,Communication Services,Internet Platforms,Equity,Internet and AI,KRW
+ANET,Arista Networks,United States,Technology,Networking Equipment,Equity,Data Centre Networking,USD
+ORCL,Oracle,United States,Technology,Software and Cloud,Equity,Cloud Infrastructure,USD
+CRM,Salesforce,United States,Technology,Enterprise Software,Equity,Enterprise Applications,USD
+NOW,ServiceNow,United States,Technology,Enterprise Software,Equity,Workflow Software,USD
+PANW,Palo Alto Networks,United States,Technology,Cybersecurity,Equity,Cybersecurity,USD
+CRWD,CrowdStrike,United States,Technology,Cybersecurity,Equity,Endpoint Security,USD
+QQQ,Nasdaq 100 ETF,United States,Technology,Large-Cap Growth,ETF,Technology,USD
+SMH,VanEck Semiconductor ETF,United States,Technology,Semiconductors,ETF,Semiconductors,USD
+SOXX,iShares Semiconductor ETF,United States,Technology,Semiconductors,ETF,Semiconductors,USD
+^DJI,Dow Jones Industrial Average,United States,Multi-Sector,Large-Cap Equities,Index,US Blue Chips,USD
+^IXIC,Nasdaq Composite,United States,Technology,Technology and Growth,Index,US Growth,USD
+^RUT,Russell 2000,United States,Multi-Sector,Small-Cap Equities,Index,US Small Caps,USD
+^STOXX50E,Euro Stoxx 50,Europe,Multi-Sector,Large-Cap Equities,Index,European Equities,EUR
+^FTSE,FTSE 100,United Kingdom,Multi-Sector,Large-Cap Equities,Index,UK Equities,GBP
+^GDAXI,DAX,Germany,Multi-Sector,Large-Cap Equities,Index,German Equities,EUR
+^FCHI,CAC 40,France,Multi-Sector,Large-Cap Equities,Index,French Equities,EUR
+^N225,Nikkei 225,Japan,Multi-Sector,Large-Cap Equities,Index,Japan Equities,JPY
+^TOPX,TOPIX,Japan,Multi-Sector,Broad Market,Index,Japan Equities,JPY
+^KS11,KOSPI,South Korea,Multi-Sector,Broad Market,Index,Korea Equities,KRW
+^TWII,Taiwan Weighted Index,Taiwan,Multi-Sector,Broad Market,Index,Taiwan Equities,TWD
+^HSI,Hang Seng Index,Hong Kong,Multi-Sector,Broad Market,Index,Hong Kong Equities,HKD
+000001.SS,Shanghai Composite,China,Multi-Sector,Broad Market,Index,China Equities,CNY
+399001.SZ,Shenzhen Component,China,Multi-Sector,Broad Market,Index,China Equities,CNY
+^STI,Straits Times Index,Singapore,Multi-Sector,Large-Cap Equities,Index,Singapore Equities,SGD
+^AXJO,S&P ASX 200,Australia,Multi-Sector,Broad Market,Index,Australian Equities,AUD
+^BSESN,S&P BSE Sensex,India,Multi-Sector,Large-Cap Equities,Index,India Equities,INR
+^NSEI,Nifty 50,India,Multi-Sector,Large-Cap Equities,Index,India Equities,INR
+VOO,Vanguard S&P 500 ETF,United States,Multi-Sector,Large-Cap Equities,ETF,US Broad Market,USD
+SPY,SPDR S&P 500 ETF,United States,Multi-Sector,Large-Cap Equities,ETF,US Broad Market,USD
+QQQ,Invesco QQQ,United States,Technology,Large-Cap Growth,ETF,US Technology,USD
+DIA,SPDR Dow Jones Industrial Average ETF,United States,Multi-Sector,Large-Cap Equities,ETF,US Blue Chips,USD
+IWM,iShares Russell 2000 ETF,United States,Multi-Sector,Small-Cap Equities,ETF,US Small Caps,USD
+VTI,Vanguard Total Stock Market ETF,United States,Multi-Sector,Broad Market,ETF,US Total Market,USD
+ACWI,iShares MSCI ACWI ETF,Global,Multi-Sector,Global Equities,ETF,Global Equities,USD
+VEA,Vanguard Developed Markets ETF,Global,Multi-Sector,Developed Markets,ETF,Developed Markets,USD
+VWO,Vanguard Emerging Markets ETF,Global,Multi-Sector,Emerging Markets,ETF,Emerging Markets,USD
+EEM,iShares MSCI Emerging Markets ETF,Global,Multi-Sector,Emerging Markets,ETF,Emerging Markets,USD
+EWJ,iShares MSCI Japan ETF,Japan,Multi-Sector,Country Equities,ETF,Japan Equities,USD
+EWY,iShares MSCI South Korea ETF,South Korea,Multi-Sector,Country Equities,ETF,Korea Equities,USD
+EWT,iShares MSCI Taiwan ETF,Taiwan,Multi-Sector,Country Equities,ETF,Taiwan Equities,USD
+EWS,iShares MSCI Singapore ETF,Singapore,Multi-Sector,Country Equities,ETF,Singapore Equities,USD
+FXI,iShares China Large-Cap ETF,China,Multi-Sector,Large-Cap Equities,ETF,China Equities,USD
+MCHI,iShares MSCI China ETF,China,Multi-Sector,Broad Market,ETF,China Equities,USD
+KBA,KraneShares Bosera MSCI China A ETF,China,Multi-Sector,China A-Shares,ETF,China A-Shares,USD
+KWEB,KraneShares CSI China Internet ETF,China,Communication Services,Internet Platforms,ETF,China Internet,USD
+ASHR,Xtrackers Harvest CSI 300 China A-Shares ETF,China,Multi-Sector,China A-Shares,ETF,China A-Shares,USD
+FEZ,SPDR Euro Stoxx 50 ETF,Europe,Multi-Sector,Large-Cap Equities,ETF,European Equities,USD
+VGK,Vanguard FTSE Europe ETF,Europe,Multi-Sector,Broad Market,ETF,European Equities,USD
+SMH,VanEck Semiconductor ETF,Global,Technology,Semiconductors,ETF,Semiconductors,USD
+SOXX,iShares Semiconductor ETF,United States,Technology,Semiconductors,ETF,Semiconductors,USD
+XLK,Technology Select Sector SPDR Fund,United States,Technology,Technology,ETF,US Technology,USD
+XLF,Financial Select Sector SPDR Fund,United States,Financials,Financial Services,ETF,US Financials,USD
+XLE,Energy Select Sector SPDR Fund,United States,Energy,Energy,ETF,US Energy,USD
+XLV,Health Care Select Sector SPDR Fund,United States,Healthcare,Healthcare,ETF,US Healthcare,USD
+
