@@ -217,55 +217,116 @@ def get_market_cap(ticker: str):
         return np.nan
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def get_quote_snapshot(ticker: str) -> dict:
-    """Return Yahoo's current regular-market price and official previous close."""
+    """
+    Return one internally consistent Yahoo regular-market quote.
+
+    Priority:
+    1. Yahoo quote metadata: regularMarketPrice paired with
+       regularMarketPreviousClose.
+    2. Yahoo fast_info pair.
+    3. Unadjusted daily history fallback.
+    """
     price = np.nan
     previous_close = np.nan
+    source = "Unavailable"
 
     try:
         obj = yf.Ticker(ticker)
 
+        # Priority 1: keep both values from the same quote-metadata source.
         try:
-            fast = obj.fast_info
-            price = fast.get("lastPrice") or fast.get("last_price")
-            previous_close = (
-                fast.get("previousClose")
-                or fast.get("previous_close")
-                or fast.get("regularMarketPreviousClose")
+            info = obj.get_info()
+
+            info_price = pd.to_numeric(
+                info.get("regularMarketPrice"),
+                errors="coerce",
             )
+            info_previous_close = pd.to_numeric(
+                info.get("regularMarketPreviousClose"),
+                errors="coerce",
+            )
+
+            if (
+                not pd.isna(info_price)
+                and not pd.isna(info_previous_close)
+                and info_previous_close != 0
+            ):
+                price = float(info_price)
+                previous_close = float(info_previous_close)
+                source = "Yahoo regular market"
         except Exception:
             pass
 
+        # Priority 2: use fast_info only as a complete pair.
         if pd.isna(price) or pd.isna(previous_close):
             try:
-                info = obj.info
-                if pd.isna(price):
-                    price = info.get("regularMarketPrice", np.nan)
-                if pd.isna(previous_close):
-                    previous_close = info.get(
-                        "regularMarketPreviousClose", np.nan
-                    )
+                fast = obj.fast_info
+
+                fast_price = pd.to_numeric(
+                    fast.get("lastPrice", fast.get("last_price")),
+                    errors="coerce",
+                )
+                fast_previous_close = pd.to_numeric(
+                    fast.get(
+                        "previousClose",
+                        fast.get("previous_close"),
+                    ),
+                    errors="coerce",
+                )
+
+                if (
+                    not pd.isna(fast_price)
+                    and not pd.isna(fast_previous_close)
+                    and fast_previous_close != 0
+                ):
+                    price = float(fast_price)
+                    previous_close = float(fast_previous_close)
+                    source = "Yahoo fast info"
             except Exception:
                 pass
 
-        # Fallback only when Yahoo quote metadata is unavailable.
+        # Priority 3: use only unadjusted daily closes as a pair.
         if pd.isna(price) or pd.isna(previous_close):
-            hist = obj.history(period="5d", interval="1d", auto_adjust=False)
-            closes = hist.get("Close", pd.Series(dtype=float)).dropna()
-            if pd.isna(price) and not closes.empty:
-                price = closes.iloc[-1]
-            if pd.isna(previous_close) and len(closes) >= 2:
-                previous_close = closes.iloc[-2]
+            try:
+                history = obj.history(
+                    period="10d",
+                    interval="1d",
+                    auto_adjust=False,
+                    actions=False,
+                )
+
+                closes = pd.to_numeric(
+                    history.get("Close", pd.Series(dtype=float)),
+                    errors="coerce",
+                ).dropna()
+
+                if len(closes) >= 2:
+                    price = float(closes.iloc[-1])
+                    previous_close = float(closes.iloc[-2])
+                    source = "Yahoo daily history"
+            except Exception:
+                pass
 
     except Exception:
         pass
 
+    change_1d = (
+        (price / previous_close - 1) * 100
+        if (
+            not pd.isna(price)
+            and not pd.isna(previous_close)
+            and previous_close != 0
+        )
+        else np.nan
+    )
+
     return {
-        "price": float(price) if not pd.isna(price) else np.nan,
-        "previous_close": (
-            float(previous_close) if not pd.isna(previous_close) else np.nan
-        ),
+        "price": price,
+        "previous_close": previous_close,
+        "change_1d": change_1d,
+        "source": source,
     }
 
 
@@ -569,6 +630,7 @@ def build_market_table(
                     end_price=live_price,
                     previous_close=previous_close,
                 ),
+                "1D %": quote["change_1d"],
                 "3D %": standard_period_return(prices, "3D", live_price),
                 "5D %": standard_period_return(prices, "5D", live_price),
                 "YTD %": standard_period_return(prices, "YTD", live_price),
@@ -722,53 +784,19 @@ def make_price_chart(
 # ============================================================
 # MARKET SNAPSHOT
 # ============================================================
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def market_snapshot() -> pd.DataFrame:
     rows = []
 
     for name, ticker in OVERVIEW_ASSETS.items():
-        price = np.nan
-        previous_close = np.nan
-
-        try:
-            obj = yf.Ticker(ticker)
-
-            try:
-                fast = obj.fast_info
-                price = fast.get("lastPrice") or fast.get("last_price")
-                previous_close = fast.get("previousClose") or fast.get("previous_close")
-            except Exception:
-                pass
-
-            if price is None or pd.isna(price):
-                info = obj.info
-                price = info.get("regularMarketPrice", np.nan)
-                previous_close = info.get("regularMarketPreviousClose", np.nan)
-
-            if pd.isna(price):
-                hist = obj.history(period="2d")
-                if not hist.empty:
-                    price = float(hist["Close"].iloc[-1])
-                    if len(hist) >= 2:
-                        previous_close = float(hist["Close"].iloc[-2])
-
-        except Exception:
-            pass
-
-        daily_change = (
-            (price / previous_close - 1) * 100
-            if not pd.isna(price)
-            and not pd.isna(previous_close)
-            and previous_close != 0
-            else np.nan
-        )
+        quote = get_quote_snapshot(ticker)
 
         rows.append(
             {
                 "Name": name,
                 "Ticker": ticker,
-                "Value": price,
-                "1D %": daily_change,
+                "Value": quote["price"],
+                "1D %": quote["change_1d"],
             }
         )
 
