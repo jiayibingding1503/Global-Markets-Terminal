@@ -449,39 +449,62 @@ def standard_period_return(
     end_price: float | None = None,
 ):
     """
-    Dynamic Google/Yahoo-style price return.
+    Calculate price performance using Yahoo-style calendar anchors.
 
-    * 1D and 5D use trading-session closes.
-    * YTD uses the previous calendar year's final close.
-    * Month/year periods use the final close on or before the exact
-      calendar anchor, which handles weekends and exchange holidays.
-    * Returns are price returns, not dividend-reinvested total returns.
+    The starting value comes from regular daily closing prices.
+    The endpoint may be either the latest daily close or a supplied
+    live regular-market price.
     """
     daily_prices = _normalise_daily_prices(daily_prices)
-    if len(daily_prices) < 2 or period not in PERIOD_STARTS:
+
+    if len(daily_prices) < 2:
         return np.nan
 
-    latest_price = (
-        float(daily_prices.iloc[-1])
-        if end_price is None or pd.isna(end_price)
-        else float(end_price)
-    )
+    if end_price is None or pd.isna(end_price):
+        end_price = float(daily_prices.iloc[-1])
+    else:
+        end_price = float(end_price)
 
-    if period == "1D":
-        reference = float(daily_prices.iloc[-2])
-        return (latest_price / reference - 1) * 100 if reference else np.nan
+    if period in {"1D", "3D", "5D"}:
+        sessions = {
+            "1D": 1,
+            "3D": 3,
+            "5D": 5,
+        }[period]
 
-    if period == "5D":
-        if len(daily_prices) <= 5:
+        # Use completed historical sessions as the denominator.
+        if len(daily_prices) <= sessions:
             return np.nan
-        reference = float(daily_prices.iloc[-6])
-        return (latest_price / reference - 1) * 100 if reference else np.nan
 
-    if period == "YTD":
-        return ytd_return(daily_prices, end_price=latest_price)
+        reference_close = float(daily_prices.iloc[-(sessions + 1)])
 
-    anchor = PERIOD_STARTS[period](daily_prices.index[-1])
-    return date_return(daily_prices, anchor, end_price=latest_price)
+    elif period == "YTD":
+        current_year = daily_prices.index[-1].year
+
+        prior_year_prices = daily_prices[
+            daily_prices.index.year < current_year
+        ]
+
+        if prior_year_prices.empty:
+            return np.nan
+
+        reference_close = float(prior_year_prices.iloc[-1])
+
+    elif period in {"1M", "3M", "6M", "1Y", "3Y", "5Y"}:
+        target_date = PERIOD_STARTS[period](daily_prices.index[-1])
+
+        reference_close = _reference_close_on_or_before(
+            daily_prices,
+            target_date,
+        )
+
+    else:
+        return np.nan
+
+    if pd.isna(reference_close) or reference_close == 0:
+        return np.nan
+
+    return (end_price / reference_close - 1) * 100
 
 
 def build_market_table(
@@ -493,8 +516,14 @@ def build_market_table(
     for _, item in universe.iterrows():
         ticker = item["Ticker"]
         prices = get_close_series(history, ticker)
+        prices = _normalise_daily_prices(prices)
 
-        if prices.empty:
+        live_price = get_regular_market_price(ticker)
+
+        if pd.isna(live_price) and not prices.empty:
+            live_price = float(prices.iloc[-1])
+
+        if prices.empty or pd.isna(live_price):
             values = {
                 "Price": np.nan,
                 "1D %": np.nan,
@@ -505,14 +534,71 @@ def build_market_table(
                 "5Y %": np.nan,
             }
         else:
+            # Yahoo daily history may already contain today's partial or
+            # completed session. Remove the final observation if it has
+            # the same date as today, so previous-close calculations do
+            # not accidentally compare live price against itself.
+            ticker_history = prices.copy()
+
+            today = pd.Timestamp.now().normalize()
+
+            if (
+                not ticker_history.empty
+                and ticker_history.index[-1].normalize() >= today
+            ):
+                completed_history = ticker_history.iloc[:-1]
+            else:
+                completed_history = ticker_history
+
+            if completed_history.empty:
+                completed_history = ticker_history
+
+            previous_close = (
+                float(completed_history.iloc[-1])
+                if not completed_history.empty
+                else np.nan
+            )
+
+            one_day_return = (
+                (live_price / previous_close - 1) * 100
+                if not pd.isna(previous_close) and previous_close != 0
+                else np.nan
+            )
+
             values = {
-                "Price": float(prices.iloc[-1]),
-                "1D %": obs_return(prices, 1),
-                "3D %": obs_return(prices, 3),
-                "5D %": obs_return(prices, 5),
-                "YTD %": ytd_return(prices),
-                "3Y %": standard_period_return(prices, "3Y"),
-                "5Y %": standard_period_return(prices, "5Y"),
+                "Price": float(live_price),
+
+                "1D %": one_day_return,
+
+                "3D %": standard_period_return(
+                    prices,
+                    "3D",
+                    end_price=live_price,
+                ),
+
+                "5D %": standard_period_return(
+                    prices,
+                    "5D",
+                    end_price=live_price,
+                ),
+
+                "YTD %": standard_period_return(
+                    prices,
+                    "YTD",
+                    end_price=live_price,
+                ),
+
+                "3Y %": standard_period_return(
+                    prices,
+                    "3Y",
+                    end_price=live_price,
+                ),
+
+                "5Y %": standard_period_return(
+                    prices,
+                    "5Y",
+                    end_price=live_price,
+                ),
             }
 
         market_cap = (
