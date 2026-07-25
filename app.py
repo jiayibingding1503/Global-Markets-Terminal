@@ -218,30 +218,61 @@ def get_market_cap(ticker: str):
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def get_regular_market_price(ticker: str):
-    """Latest regular-market price, with daily-close fallback."""
+def get_quote_snapshot(ticker: str) -> dict:
+    """Return Yahoo's current regular-market price and official previous close."""
+    price = np.nan
+    previous_close = np.nan
+
     try:
         obj = yf.Ticker(ticker)
+
         try:
             fast = obj.fast_info
-            value = fast.get("lastPrice") or fast.get("last_price")
+            price = fast.get("lastPrice") or fast.get("last_price")
+            previous_close = (
+                fast.get("previousClose")
+                or fast.get("previous_close")
+                or fast.get("regularMarketPreviousClose")
+            )
         except Exception:
-            value = None
+            pass
 
-        if value is None or pd.isna(value):
+        if pd.isna(price) or pd.isna(previous_close):
             try:
-                value = obj.info.get("regularMarketPrice")
+                info = obj.info
+                if pd.isna(price):
+                    price = info.get("regularMarketPrice", np.nan)
+                if pd.isna(previous_close):
+                    previous_close = info.get(
+                        "regularMarketPreviousClose", np.nan
+                    )
             except Exception:
-                value = None
+                pass
 
-        if value is None or pd.isna(value):
+        # Fallback only when Yahoo quote metadata is unavailable.
+        if pd.isna(price) or pd.isna(previous_close):
             hist = obj.history(period="5d", interval="1d", auto_adjust=False)
-            if not hist.empty:
-                value = hist["Close"].dropna().iloc[-1]
+            closes = hist.get("Close", pd.Series(dtype=float)).dropna()
+            if pd.isna(price) and not closes.empty:
+                price = closes.iloc[-1]
+            if pd.isna(previous_close) and len(closes) >= 2:
+                previous_close = closes.iloc[-2]
 
-        return float(value) if value is not None and not pd.isna(value) else np.nan
     except Exception:
-        return np.nan
+        pass
+
+    return {
+        "price": float(price) if not pd.isna(price) else np.nan,
+        "previous_close": (
+            float(previous_close) if not pd.isna(previous_close) else np.nan
+        ),
+    }
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_regular_market_price(ticker: str):
+    """Compatibility wrapper for callers that only need the latest price."""
+    return get_quote_snapshot(ticker)["price"]
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -445,6 +476,7 @@ def standard_period_return(
     daily_prices: pd.Series,
     period: str,
     end_price: float | None = None,
+    previous_close: float | None = None,
 ):
     """
     Unified dynamic chart-return engine for equities, ETFs and indices.
@@ -469,7 +501,17 @@ def standard_period_return(
         else float(end_price)
     )
 
-    session_map = {"1D": 1, "3D": 3, "5D": 5}
+    # Yahoo/Google 1D percentage is current regular-market price versus
+    # Yahoo's official regularMarketPreviousClose. Do not infer this from
+    # the daily series because that series may already contain today's bar.
+    if period == "1D":
+        if previous_close is not None and not pd.isna(previous_close):
+            return _safe_return(latest_price, previous_close)
+        if len(prices) < 2:
+            return np.nan
+        return _safe_return(prices.iloc[-1], prices.iloc[-2])
+
+    session_map = {"3D": 3, "5D": 5}
     if period in session_map:
         sessions = session_map[period]
         if len(prices) <= sessions:
@@ -501,7 +543,9 @@ def build_market_table(
     for _, item in universe.iterrows():
         ticker = item["Ticker"]
         prices = _normalise_daily_prices(get_close_series(history, ticker))
-        live_price = get_regular_market_price(ticker)
+        quote = get_quote_snapshot(ticker)
+        live_price = quote["price"]
+        previous_close = quote["previous_close"]
 
         if pd.isna(live_price) and not prices.empty:
             live_price = float(prices.iloc[-1])
@@ -519,7 +563,12 @@ def build_market_table(
         else:
             values = {
                 "Price": float(live_price),
-                "1D %": standard_period_return(prices, "1D", live_price),
+                "1D %": standard_period_return(
+                    prices,
+                    "1D",
+                    end_price=live_price,
+                    previous_close=previous_close,
+                ),
                 "3D %": standard_period_return(prices, "3D", live_price),
                 "5D %": standard_period_return(prices, "5D", live_price),
                 "YTD %": standard_period_return(prices, "YTD", live_price),
@@ -1185,7 +1234,9 @@ with tabs[4]:
                 else:
                     daily_history = download_history((selected,), "6y")
                     daily_prices = get_close_series(daily_history, selected)
-                    live_price = get_regular_market_price(selected)
+                    quote = get_quote_snapshot(selected)
+                    live_price = quote["price"]
+                    previous_close = quote["previous_close"]
                     if pd.isna(live_price):
                         live_price = float(daily_prices.iloc[-1])
 
@@ -1193,9 +1244,13 @@ with tabs[4]:
                         daily_prices,
                         period,
                         end_price=live_price,
+                        previous_close=previous_close,
                     )
                     one_day = standard_period_return(
-                        daily_prices, "1D", end_price=live_price
+                        daily_prices,
+                        "1D",
+                        end_price=live_price,
+                        previous_close=previous_close,
                     )
                     five_day = standard_period_return(
                         daily_prices, "5D", end_price=live_price
@@ -1272,7 +1327,9 @@ with tabs[5]:
         else:
             daily_history = download_history((ticker,), "6y")
             daily_prices = get_close_series(daily_history, ticker)
-            live_price = get_regular_market_price(ticker)
+            quote = get_quote_snapshot(ticker)
+            live_price = quote["price"]
+            previous_close = quote["previous_close"]
             if pd.isna(live_price):
                 live_price = float(daily_prices.iloc[-1])
 
@@ -1280,9 +1337,13 @@ with tabs[5]:
                 daily_prices,
                 period,
                 end_price=live_price,
+                previous_close=previous_close,
             )
             one_day = standard_period_return(
-                daily_prices, "1D", end_price=live_price
+                daily_prices,
+                "1D",
+                end_price=live_price,
+                previous_close=previous_close,
             )
             five_day = standard_period_return(
                 daily_prices, "5D", end_price=live_price
