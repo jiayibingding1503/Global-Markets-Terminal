@@ -89,6 +89,7 @@ OVERVIEW_ASSETS = {
     "Dow Jones": "^DJI",
     "Nikkei 225": "^N225",
     "KOSPI": "^KS11",
+    "STI": "^STI"
     "Hang Seng": "^HSI",
     "VIX": "^VIX",
     "Gold": "GC=F",
