@@ -84,6 +84,8 @@ MAG7 = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA"]
 OVERVIEW_ASSETS = {
     "S&P 500": "^GSPC",
     "Nasdaq": "^IXIC",
+    "S&P 500 Futures": "ES=F"
+    "Nasdaq 100 Futures": "NQ=F",
     "Dow Jones": "^DJI",
     "Nikkei 225": "^N225",
     "KOSPI": "^KS11",
@@ -1201,7 +1203,6 @@ with tabs[3]:
         fx_rows.append(
             {
                 "Pair": name,
-                "Ticker": ticker,
                 "Price": np.nan if prices.empty else prices.iloc[-1],
                 "1D %": np.nan if len(prices) < 2 else obs_return(prices, 1),
                 "YTD %": np.nan if prices.empty else ytd_return(prices),
@@ -1236,7 +1237,6 @@ with tabs[3]:
         commodity_rows.append(
             {
                 "Commodity": name,
-                "Ticker": ticker,
                 "Price": np.nan if prices.empty else prices.iloc[-1],
                 "1D %": np.nan if len(prices) < 2 else obs_return(prices, 1),
                 "YTD %": np.nan if prices.empty else ytd_return(prices),
