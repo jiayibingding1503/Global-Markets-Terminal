@@ -1264,95 +1264,310 @@ with tabs[3]:
 # SEARCH
 # ============================================================
 with tabs[4]:
-    st.markdown('<div class="eyebrow">Discovery</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="eyebrow">Discovery</div>',
+        unsafe_allow_html=True,
+    )
     st.subheader("Security Search")
+
+    # Store selected securities across reruns and new searches
+    if "comparison_tickers" not in st.session_state:
+        st.session_state.comparison_tickers = []
 
     query = st.text_input(
         "Search any listed security",
         placeholder="Microsoft, DBS, Toyota, Samsung, KWEB...",
         label_visibility="collapsed",
+        key="security_search_query",
     )
 
+    # ========================================================
+    # SEARCH RESULTS
+    # ========================================================
     if query.strip():
         results = search_yahoo(query)
 
         if results.empty:
             st.info("No matching securities were returned.")
-        else:
-            st.dataframe(results, width="stretch", hide_index=True)
 
-            choices = results["Ticker"].dropna().tolist()
-            if choices:
-                selected = st.selectbox("Open result", choices)
-                period = st.radio(
-                    "Period",
-                    ["1D", "5D", "1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y"],
-                    horizontal=True,
-                    key="search_period",
+        else:
+            st.dataframe(
+                results,
+                width="stretch",
+                hide_index=True,
+            )
+
+            choices = results["Ticker"].dropna().unique().tolist()
+
+            selected_result = st.selectbox(
+                "Select a search result",
+                choices,
+                key="search_result_selection",
+            )
+
+            if st.button(
+                "Add to comparison",
+                key="add_comparison_ticker",
+            ):
+                if selected_result not in st.session_state.comparison_tickers:
+                    st.session_state.comparison_tickers.append(
+                        selected_result
+                    )
+
+    # ========================================================
+    # SELECTED SECURITIES
+    # ========================================================
+    selected_tickers = st.multiselect(
+        "Compare securities",
+        options=st.session_state.comparison_tickers,
+        default=st.session_state.comparison_tickers,
+        key="compare_tickers",
+    )
+
+    # Keep session state aligned when a ticker is removed
+    st.session_state.comparison_tickers = selected_tickers
+
+    if not selected_tickers:
+        st.info(
+            "Search for a security and click "
+            "'Add to comparison' to begin."
+        )
+
+    else:
+        primary_ticker = selected_tickers[0]
+
+        period = st.radio(
+            "Period",
+            [
+                "1D",
+                "5D",
+                "1M",
+                "3M",
+                "6M",
+                "YTD",
+                "1Y",
+                "3Y",
+                "5Y",
+            ],
+            horizontal=True,
+            key="search_period",
+        )
+
+        chart_mode = st.radio(
+            "Chart mode",
+            ["Relative Performance", "Price"],
+            horizontal=True,
+            key="search_chart_mode",
+        )
+
+        # ====================================================
+        # PRIMARY SECURITY METRICS
+        # ====================================================
+        primary_history = download_chart_history(
+            primary_ticker,
+            period,
+        )
+
+        primary_prices = get_close_series(
+            primary_history,
+            primary_ticker,
+        )
+
+        daily_history = download_history(
+            (primary_ticker,),
+            "6y",
+        )
+
+        daily_prices = get_close_series(
+            daily_history,
+            primary_ticker,
+        )
+
+        quote = get_quote_snapshot(primary_ticker)
+
+        live_price = quote["price"]
+        previous_close = quote["previous_close"]
+
+        if pd.isna(live_price) and not daily_prices.empty:
+            live_price = float(daily_prices.iloc[-1])
+
+        selected_return = standard_period_return(
+            daily_prices,
+            period,
+            end_price=live_price,
+            previous_close=previous_close,
+        )
+
+        one_day = standard_period_return(
+            daily_prices,
+            "1D",
+            end_price=live_price,
+            previous_close=previous_close,
+        )
+
+        five_day = standard_period_return(
+            daily_prices,
+            "5D",
+            end_price=live_price,
+        )
+
+        ytd_perf = standard_period_return(
+            daily_prices,
+            "YTD",
+            end_price=live_price,
+        )
+
+        m1, m2, m3, m4, m5 = st.columns(5)
+
+        m1.metric(
+            f"{primary_ticker} Price",
+            "—"
+            if pd.isna(live_price)
+            else f"{live_price:,.2f}",
+        )
+
+        m2.metric(
+            f"{period} Return",
+            "—"
+            if pd.isna(selected_return)
+            else f"{selected_return:+.2f}%",
+        )
+
+        m3.metric(
+            "1 Day",
+            "—"
+            if pd.isna(one_day)
+            else f"{one_day:+.2f}%",
+        )
+
+        m4.metric(
+            "5 Day",
+            "—"
+            if pd.isna(five_day)
+            else f"{five_day:+.2f}%",
+        )
+
+        m5.metric(
+            "YTD",
+            "—"
+            if pd.isna(ytd_perf)
+            else f"{ytd_perf:+.2f}%",
+        )
+
+        # ====================================================
+        # MULTI-SECURITY CHART
+        # ====================================================
+        fig = go.Figure()
+        plotted_tickers = []
+
+        for ticker in selected_tickers:
+            ticker_history = download_chart_history(
+                ticker,
+                period,
+            )
+
+            ticker_prices = get_close_series(
+                ticker_history,
+                ticker,
+            )
+
+            ticker_prices = (
+                pd.to_numeric(
+                    ticker_prices,
+                    errors="coerce",
+                )
+                .dropna()
+                .sort_index()
+            )
+
+            if ticker_prices.empty:
+                continue
+
+            plotted_tickers.append(ticker)
+
+            if chart_mode == "Relative Performance":
+                chart_values = (
+                    ticker_prices
+                    / float(ticker_prices.iloc[0])
+                    - 1
+                ) * 100
+
+                hover_template = (
+                    f"<b>{ticker}</b><br>"
+                    "%{x}<br>"
+                    "%{y:+.2f}%"
+                    "<extra></extra>"
                 )
 
-                search_history = download_chart_history(selected, period)
-                prices = get_close_series(search_history, selected)
+            else:
+                chart_values = ticker_prices
 
-                if prices.empty:
-                    st.warning(f"No price history returned for {selected}.")
-                else:
-                    daily_history = download_history((selected,), "6y")
-                    daily_prices = get_close_series(daily_history, selected)
-                    quote = get_quote_snapshot(selected)
-                    live_price = quote["price"]
-                    previous_close = quote["previous_close"]
-                    if pd.isna(live_price):
-                        live_price = float(daily_prices.iloc[-1])
+                hover_template = (
+                    f"<b>{ticker}</b><br>"
+                    "%{x}<br>"
+                    "%{y:,.2f}"
+                    "<extra></extra>"
+                )
 
-                    selected_return = standard_period_return(
-                        daily_prices,
-                        period,
-                        end_price=live_price,
-                        previous_close=previous_close,
-                    )
-                    one_day = standard_period_return(
-                        daily_prices,
-                        "1D",
-                        end_price=live_price,
-                        previous_close=previous_close,
-                    )
-                    five_day = standard_period_return(
-                        daily_prices, "5D", end_price=live_price
-                    )
-                    ytd_perf = standard_period_return(
-                        daily_prices, "YTD", end_price=live_price
-                    )
+            fig.add_trace(
+                go.Scatter(
+                    x=chart_values.index,
+                    y=chart_values,
+                    mode="lines",
+                    name=ticker,
+                    hovertemplate=hover_template,
+                )
+            )
 
-                    m1, m2, m3, m4, m5 = st.columns(5)
-                    m1.metric("Price", f"{live_price:,.2f}")
-                    m2.metric(
-                        f"{period} Return",
-                        "—" if pd.isna(selected_return)
-                        else f"{selected_return:+.2f}%",
-                    )
-                    m3.metric(
-                        "1 Day",
-                        "—" if pd.isna(one_day) else f"{one_day:+.2f}%",
-                    )
-                    m4.metric(
-                        "5 Day",
-                        "—" if pd.isna(five_day) else f"{five_day:+.2f}%",
-                    )
-                    m5.metric(
-                        "YTD",
-                        "—" if pd.isna(ytd_perf) else f"{ytd_perf:+.2f}%",
-                    )
+        if not plotted_tickers:
+            st.warning(
+                "No price history was returned for the "
+                "selected securities."
+            )
 
-                    st.plotly_chart(
-                        make_price_chart(
-                            prices,
-                            selected,
-                            selected_return,
-                        ),
-                        width="stretch",
-                    )
+        else:
+            fig.update_layout(
+                title=(
+                    "Relative Performance"
+                    if chart_mode == "Relative Performance"
+                    else "Price Comparison"
+                ),
+                template="plotly_dark",
+                hovermode="x unified",
+                height=500,
+                margin=dict(
+                    l=10,
+                    r=10,
+                    t=65,
+                    b=10,
+                ),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="left",
+                    x=0,
+                ),
+                yaxis_title=(
+                    "Return (%)"
+                    if chart_mode == "Relative Performance"
+                    else "Price"
+                ),
+                xaxis_title=None,
+            )
 
+            if chart_mode == "Relative Performance":
+                fig.add_hline(
+                    y=0,
+                    line_dash="dot",
+                    opacity=0.5,
+                )
+
+            st.plotly_chart(
+                fig,
+                width="stretch",
+                key="multi_security_search_chart",
+            )
 
 # ============================================================
 # CHARTS
