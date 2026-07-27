@@ -84,7 +84,7 @@ MAG7 = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA"]
 OVERVIEW_ASSETS = {
     "S&P 500": "^GSPC",
     "Nasdaq": "^IXIC",
-    "S&P 500 Futures": "ES=F"
+    "S&P 500 Futures": "ES=F",
     "Nasdaq 100 Futures": "NQ=F",
     "Dow Jones": "^DJI",
     "Nikkei 225": "^N225",
