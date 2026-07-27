@@ -1270,13 +1270,13 @@ with tabs[4]:
     )
     st.subheader("Security Search")
 
-    # Store selected securities across reruns and new searches
+    # Store selected comparison tickers across Streamlit reruns
     if "comparison_tickers" not in st.session_state:
         st.session_state.comparison_tickers = []
 
     query = st.text_input(
         "Search any listed security",
-        placeholder="Microsoft, DBS, Toyota, Samsung, KWEB...",
+        placeholder="MSFT, NVDA, Apple, DBS, Toyota...",
         label_visibility="collapsed",
         key="security_search_query",
     )
@@ -1297,25 +1297,33 @@ with tabs[4]:
                 hide_index=True,
             )
 
-            choices = results["Ticker"].dropna().unique().tolist()
+            choices = (
+                results["Ticker"]
+                .dropna()
+                .astype(str)
+                .drop_duplicates()
+                .tolist()
+            )
 
-            selected_result = st.selectbox(
-                "Select a search result",
-                choices,
+            selected_results = st.multiselect(
+                "Select search results",
+                options=choices,
+                default=choices,
                 key="search_result_selection",
             )
 
             if st.button(
-                "Add to comparison",
-                key="add_comparison_ticker",
+                "Add selected to comparison",
+                key="add_comparison_tickers",
             ):
-                if selected_result not in st.session_state.comparison_tickers:
-                    st.session_state.comparison_tickers.append(
-                        selected_result
-                    )
+                for ticker in selected_results:
+                    if ticker not in st.session_state.comparison_tickers:
+                        st.session_state.comparison_tickers.append(ticker)
+
+                st.rerun()
 
     # ========================================================
-    # SELECTED SECURITIES
+    # CURRENT COMPARISON LIST
     # ========================================================
     selected_tickers = st.multiselect(
         "Compare securities",
@@ -1324,13 +1332,13 @@ with tabs[4]:
         key="compare_tickers",
     )
 
-    # Keep session state aligned when a ticker is removed
+    # Keep stored comparison list aligned with removals
     st.session_state.comparison_tickers = selected_tickers
 
     if not selected_tickers:
         st.info(
-            "Search for a security and click "
-            "'Add to comparison' to begin."
+            "Search for securities, select the results, "
+            "then click 'Add selected to comparison'."
         )
 
     else:
@@ -1363,16 +1371,6 @@ with tabs[4]:
         # ====================================================
         # PRIMARY SECURITY METRICS
         # ====================================================
-        primary_history = download_chart_history(
-            primary_ticker,
-            period,
-        )
-
-        primary_prices = get_close_series(
-            primary_history,
-            primary_ticker,
-        )
-
         daily_history = download_history(
             (primary_ticker,),
             "6y",
@@ -1421,9 +1419,7 @@ with tabs[4]:
 
         m1.metric(
             f"{primary_ticker} Price",
-            "—"
-            if pd.isna(live_price)
-            else f"{live_price:,.2f}",
+            "—" if pd.isna(live_price) else f"{live_price:,.2f}",
         )
 
         m2.metric(
