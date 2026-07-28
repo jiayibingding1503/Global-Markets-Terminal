@@ -83,10 +83,11 @@ MAG7 = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA"]
 
 OVERVIEW_ASSETS = {
     "S&P 500": "^GSPC",
-    "Nasdaq": "^IXIC",
+    "Nasdaq 100": "^NDX",
     "S&P 500 Futures": "ES=F",
     "Nasdaq 100 Futures": "NQ=F",
     "Dow Jones": "^DJI",
+    "Russell 2000": "^RUT",
     "Nikkei 225": "^N225",
     "KOSPI": "^KS11",
     "STI": "^STI",
@@ -106,6 +107,7 @@ FX_ASSETS = {
     "USD/CNY": "CNY=X",
     "USD/SGD": "SGD=X",
     "AUD/USD": "AUDUSD=X",
+    "USD/KRW": "KRW=X",
 }
 
 COMMODITY_ASSETS = {
