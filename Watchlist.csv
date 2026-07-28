@@ -1,5 +1,6 @@
 Ticker,Name,Country,Sector,Industry,Asset Class,Theme,Currency
 ^GSPC,S&P 500,United States,Multi-Sector,Broad Market,Index,Broad Market,USD
+^RSP,Invesco S&P 500 Equal Weight ETF,United States,Multi-Sector,Broad Market,ETF,Equal Weight Equity,USD
 ^NDX,Nasdaq 100,United States,Technology,Large-Cap Growth,Index,Technology,USD
 ^SOX,Philadelphia Semiconductor Index,United States,Technology,Semiconductors,Index,Semiconductors,USD
 ^N225,Nikkei 225,Japan,Multi-Sector,Broad Market,Index,Japan Equities,JPY
