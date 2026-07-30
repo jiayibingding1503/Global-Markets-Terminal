@@ -1,6 +1,5 @@
 Ticker,Name,Country,Sector,Industry,Asset Class,Theme,Currency
 ^GSPC,S&P 500,United States,Multi-Sector,Broad Market,Index,Broad Market,USD
-^RSP,Invesco S&P 500 Equal Weight ETF,United States,Multi-Sector,Broad Market,ETF,Equal Weight Equity,USD
 ^NDX,Nasdaq 100,United States,Technology,Large-Cap Growth,Index,Technology,USD
 ^SOX,Philadelphia Semiconductor Index,United States,Technology,Semiconductors,Index,Semiconductors,USD
 ^N225,Nikkei 225,Japan,Multi-Sector,Broad Market,Index,Japan Equities,JPY
@@ -69,6 +68,7 @@ SOXX,iShares Semiconductor ETF,United States,Technology,Semiconductors,ETF,Semic
 ^NSEI,Nifty 50,India,Multi-Sector,Large-Cap Equities,Index,India Equities,INR
 VOO,Vanguard S&P 500 ETF,United States,Multi-Sector,Large-Cap Equities,ETF,US Broad Market,USD
 SPY,SPDR S&P 500 ETF,United States,Multi-Sector,Large-Cap Equities,ETF,US Broad Market,USD
+RSP,Invesco S&P 500 Equal Weight ETF,United States,Multi-Sector,Broad Market,ETF,Equal Weight Equity,USD
 QQQ,Invesco QQQ,United States,Technology,Large-Cap Growth,ETF,US Technology,USD
 DIA,SPDR Dow Jones Industrial Average ETF,United States,Multi-Sector,Large-Cap Equities,ETF,US Blue Chips,USD
 IWM,iShares Russell 2000 ETF,United States,Multi-Sector,Small-Cap Equities,ETF,US Small Caps,USD
